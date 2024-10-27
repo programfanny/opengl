@@ -148,9 +148,9 @@ void body60(Vector3 *vpoint,Face5 *face5, Face6 *face6){
     };
     int face[][3]={
          0, 1, 4,    0, 4, 11,   0, 11, 10,   0, 10,  7,    0,  7,  1,  
-         9, 7, 1,    7, 1,  8,   9,  8,  2,   9,  2,  6,    9,  6,  7, 
+         9, 7, 1,    9,  8, 1,   9,  8,  2,   9,  2,  6,    9,  6,  7, 
          5, 2, 8,    5, 8,  4,   5,  4, 11,   5, 11,  3,    5,  3,  2, 
-         1, 8, 4,    3, 6, 10,   2,  3,  6,   3, 11, 10,    6,  7, 11,
+         1, 8, 4,    3, 6, 10,   2,  3,  6,   3, 11, 10,    6,  7, 10,
     };	
 	for(int i=0;i<12;i++){
 		for(int j=0;j<5;j++){
@@ -447,7 +447,7 @@ void RenderScene(float angle, Vector3* vpoint, Face5* face5,Face6* face6,float c
 	// DrawOctahedron();
 	// DrawTetrahedron();
 	// DrawDodecahedron();
-	DrawIcosahedron3(color);
+	// DrawIcosahedron3(color);
 	DrawFootball(vpoint,face5,face6,color);
 
 	//glPopMatrix();
