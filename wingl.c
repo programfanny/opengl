@@ -282,7 +282,7 @@ void DrawAxis(){
 		0.0f,2.0f,0.0f,
 		0.0f,0.0f,2.0f,
 		0.0f,0.0f,0.0f,
-		1.0f,1.0f,1.0f,	
+		0.5f,0.5f,0.5f,	
 	};
 	glColor3fv(varray[4]);
 	glLineWidth(0.5f);
@@ -486,6 +486,14 @@ void DrawIcosahedron(){
 		glBegin(GL_POLYGON);
 		for(int j=0;j<4;j++){
 			glVertex3fv(vp[plane[i][j]]);
+		}
+		glEnd();
+	}
+	glColor3f(1.0f,1.0f,1.0f);
+	for(int i=0;i<sizeof(faces)/sizeof(faces[0]);i++){
+		glBegin(GL_LINE_LOOP);
+		for(int j=0;j<3;j++){
+			glVertex3fv(vp[faces[i][j]]);
 		}
 		glEnd();
 	}
