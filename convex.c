@@ -6,8 +6,10 @@
 
 #define ID_TIME 1
 
-void InitPoints(POINT *p, int *stack, int num);
+void InitPoints(POINT* p, int* stack, int num);
 int convex( POINT *p,int *stack,int size);
+void SaveData(POINT* p, int* stack, int num);
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine, int iCmdShow){
 	HWND hwnd;
@@ -29,7 +31,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
 		MessageBox(NULL,"The program requires WINDOWS NT!","Error",MB_ICONERROR);
 		return 0;
 	}
-	hwnd = CreateWindow(WndClassName,"OpenGL Window Demo",WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 830,480,NULL,NULL,hInstance, NULL);
+	hwnd = CreateWindow(WndClassName,"OpenGL Window Demo",WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 830,750,NULL,NULL,hInstance, NULL);
    
 	ShowWindow(hwnd, iCmdShow);
 	UpdateWindow(hwnd);
@@ -48,6 +50,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 	static HFONT hFont;
 	HPEN hOldPen;
 	static HPEN hPen;
+	static RECT rect;
 
 	RECT rcClient;                 // client area rectangle 
 	POINT ptClientUL;              // client upper left corner 
@@ -56,23 +59,31 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 	static POINTS ptsEnd;          // new endpoint 
 	static POINTS ptsPrevEnd;      // previous endpoint 
 	static BOOL fPrevLine = FALSE; // previous line flag 
-
+	static int cxClient, cyClient ;
 	int num=20;
 	static POINT *p;
 	static int *stack,top;
 	static BOOL TimeON;
 	switch (message){
 		case WM_CREATE:
-			// srand((unsigned)time(NULL));
-			hFont=CreateFont(-10,-5,0,0,800,TRUE,FALSE,FALSE,CHINESEBIG5_CHARSET,OUT_CHARACTER_PRECIS,CLIP_CHARACTER_PRECIS,DEFAULT_QUALITY,FF_MODERN,NULL);
+			hFont=CreateFont(-8,-4,0,0,500,FALSE,FALSE,FALSE,0,0,0,0,0,0);
 			p=malloc(num*sizeof(POINT));
 			stack=malloc(num*sizeof(int));
 			InitPoints(p,stack,num);
 			hPen = CreatePen(PS_SOLID, 2,RGB(255,0,0));
 			top=-1;TimeON=FALSE; 
 			return 0;
+		case WM_SIZE:
+			cxClient=LOWORD(lParam);
+			cyClient=HIWORD(lParam); 
+			GetClientRect(hwnd, &rect);
+			rect.right=500;
+			rect.bottom=420;
+			return 0;	
 		case WM_PAINT:
 			hdc = BeginPaint(hwnd, &ps); 
+			GetClientRect(hwnd, &rect);
+			rect.right=500;rect.bottom=420;
 			hOldFont = SelectObject(hdc, hFont);
 			hOldPen = SelectObject(hdc, hPen);
 			MoveToEx(hdc, p[stack[0]].x, p[stack[0]].y,NULL);
@@ -84,17 +95,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 			for(int i=0;i<num;i++){
 				Ellipse(hdc,p[i].x-10,p[i].y-10,p[i].x+10,p[i].y+10);
 				sprintf(buf,"%2d",i);
-				TextOut(hdc,p[i].x-8,p[i].y-6,buf,strlen(buf));
+				TextOut(hdc,p[i].x-6,p[i].y-6,buf,strlen(buf));
 			}
 			SetTextColor(hdc,RGB(0,0,0));
 			for(int i=0;i<num;i++){
 				sprintf(buf,"%2d-( %3d , %3d )",i,p[i].x,p[i].y);
-				TextOut(hdc, 420+i/25*300,20+i%25*15,buf,strlen(buf));
+				TextOut(hdc, 400+i/25*300,20+i%25*15,buf,strlen(buf));
 			}
 			SetTextColor(hdc,RGB(255,0,255));
 			for(int i=0;i<top+1;i++){
 				sprintf(buf," %2d ",stack[i]);				
-				TextOut(hdc, 525+i/25*20,20+i%25*15,buf,strlen(buf));
+				TextOut(hdc, 480+i/25*20,20+i%25*15,buf,strlen(buf));
 			}
 			SetTextColor(hdc, RGB(0,0,0));
 			SelectObject(hdc, hOldFont);
@@ -107,18 +118,20 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 					break;
 				case VK_RETURN:
 					InitPoints(p, stack, num);
-					top=-1;
 				case VK_F3:
-					top=convex( p,stack,num);
-					InvalidateRect(hwnd, NULL,TRUE);
+					top=convex( p,stack,num );
+					InvalidateRect(hwnd, &rect,TRUE);
 					break; 
 				case VK_SPACE:
 					TimeON = !TimeON;
 					if(TimeON){
-						SetTimer(hwnd, ID_TIME,250,NULL);
+						SetTimer(hwnd, ID_TIME,2000,NULL);
 					}else{
 						KillTimer(hwnd, ID_TIME);
 					}
+					break;	
+				case VK_INSERT:
+					SaveData( p,stack,num );
 					break;	
 			}
 			return 0;
@@ -174,7 +187,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 int cross(POINT o, POINT a, POINT b) {
 	return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
 }
-
 int partition(int *stack, POINT *p, int low, int high) {
 	int pivot = stack[high];
 	int i = low - 1;
@@ -202,32 +214,27 @@ int sort(POINT *p, int *stack, int size) {
 	quickSort(stack, p, 0, size - 1);
 	return 0; 
 }
-
 int convex( POINT *p, int *stack, int size ) {
-	int value=0;
-	char buf[100];
 	int *pindex=malloc(size*sizeof(int));
 	for(int i=0;i<size;i++)pindex[i]=i;
 	sort(p, pindex, size);
-	for(int i=0;i<size;i++){
-		stack[i]=pindex[i];
-	}
-	int top = 0;	
+	for(int i=0;i<size;i++){stack[i]=pindex[i];}
+	int top = 0;
 	for(int i = top+1; i<size; i++){
 		while((top>0) && (cross(p[stack[top-1]],p[stack[top]],p[pindex[i]])<=0)){ top--; }
 		stack[++top]=pindex[i];
 	}
 	for(int i = size-2; i>=0; i--){
-		while((top>0) && (cross(p[stack[top-1]],p[stack[top]],p[pindex[i]])<0)){ top--; }
+		while((top>0) && (cross(p[stack[top-1]],p[stack[top]],p[pindex[i]])<0)){top--; }
 		stack[++top]=pindex[i];
 	}	
 	free(pindex);
 	return top;
 }
-void InitPoints(POINT *p, int *stack, int num){
+void InitPoints(POINT* p, int *stack, int num){
 	for(int i=0;i<num;i++){
-		p[i].x=20+rand()%180*2;
-		p[i].y=20+rand()%180*2;
+		p[i].x=50+rand()%150*2;
+		p[i].y=50+rand()%150*2;
 		stack[i]=i;
-	}	
+	}
 }
