@@ -214,10 +214,10 @@ int convex( POINT *p, int *stack, int size ) {
 	}
 	int top = 0;	
 	for(int i = top+1; i<size; i++){
-		while((top>0) && (cross(p[stack[top-1]],p[stack[top]],p[pindex[i]])<0)){ top--; }
+		while((top>0) && (cross(p[stack[top-1]],p[stack[top]],p[pindex[i]])<=0)){ top--; }
 		stack[++top]=pindex[i];
 	}
-	for(int i = size-1; i>=0; i--){
+	for(int i = size-2; i>=0; i--){
 		while((top>0) && (cross(p[stack[top-1]],p[stack[top]],p[pindex[i]])<0)){ top--; }
 		stack[++top]=pindex[i];
 	}	
