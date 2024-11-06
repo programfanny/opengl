@@ -3,12 +3,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <math.h>
 
 #define ID_TIME 1
 
 void InitPoints(POINT* p, int* stack, int num);
-int convex( POINT *p,int *stack,int size);
-void SaveData(POINT* p, int* stack, int num);
+int convex( POINT *p,int *stack,int *pindex, int size);
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine, int iCmdShow){
@@ -45,63 +45,65 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 { 
 	char buf[100];
 	PAINTSTRUCT ps;
-	HDC hdc;                       // handle to device context 
+	HDC hdc;
 	HFONT hOldFont;
 	static HFONT hFont;
 	HPEN hOldPen;
 	static HPEN hPen;
 	static RECT rect;
-
-	RECT rcClient;                 // client area rectangle 
-	POINT ptClientUL;              // client upper left corner 
-	POINT ptClientLR;              // client lower right corner 
-	static POINTS ptsBegin;        // beginning point 
-	static POINTS ptsEnd;          // new endpoint 
-	static POINTS ptsPrevEnd;      // previous endpoint 
-	static BOOL fPrevLine = FALSE; // previous line flag 
 	static int cxClient, cyClient ;
-	int num=20;
+	int num=60;
 	static POINT *p;
-	static int *stack,top;
+	static int *stack,*pindex,top;
 	static BOOL TimeON;
 	switch (message){
 		case WM_CREATE:
+			srand((unsigned)time(NULL));
 			hFont=CreateFont(-8,-4,0,0,500,FALSE,FALSE,FALSE,0,0,0,0,0,0);
 			p=malloc(num*sizeof(POINT));
-			stack=malloc(num*sizeof(int));
-			InitPoints(p,stack,num);
+			stack=malloc((num+1)*sizeof(int));
+			pindex=malloc(num*sizeof(int));
+			memset(pindex, 0,num*sizeof(int));
+			InitPoints(p,pindex,num);
 			hPen = CreatePen(PS_SOLID, 2,RGB(255,0,0));
 			top=-1;TimeON=FALSE; 
 			return 0;
 		case WM_SIZE:
-			cxClient=LOWORD(lParam);
-			cyClient=HIWORD(lParam); 
 			GetClientRect(hwnd, &rect);
-			rect.right=500;
 			rect.bottom=420;
 			return 0;	
 		case WM_PAINT:
 			hdc = BeginPaint(hwnd, &ps); 
 			GetClientRect(hwnd, &rect);
-			rect.right=500;rect.bottom=420;
+			rect.bottom=420;
 			hOldFont = SelectObject(hdc, hFont);
 			hOldPen = SelectObject(hdc, hPen);
-			MoveToEx(hdc, p[stack[0]].x, p[stack[0]].y,NULL);
-			for(int i=1;i<top+1;i++){
-				LineTo(hdc, p[stack[i]].x, p[stack[i]].y);
+			if(top>0){
+				MoveToEx(hdc, p[stack[0]].x, p[stack[0]].y,NULL);
+				for(int i=1;i<top+1;i++){
+					LineTo(hdc, p[stack[i]].x, p[stack[i]].y);
+				}
 			}
 			SelectObject(hdc, hOldPen);
 			SetTextColor(hdc,RGB(0,0,255));
 			for(int i=0;i<num;i++){
-				Ellipse(hdc,p[i].x-10,p[i].y-10,p[i].x+10,p[i].y+10);
-				sprintf(buf,"%2d",i);
-				TextOut(hdc,p[i].x-6,p[i].y-6,buf,strlen(buf));
+				MoveToEx(hdc,p[i].x-3,p[i].y-3,NULL);
+				LineTo(hdc,p[i].x+3,p[i].y+3);
+				MoveToEx(hdc,p[i].x-3,p[i].y+3,NULL);
+				LineTo(hdc,p[i].x+3,p[i].y-3);
+				sprintf(buf,"%2d",pindex[i]);
+				TextOut(hdc,p[pindex[i]].x-3,p[pindex[i]].y+3,buf,strlen(buf));
 			}
 			SetTextColor(hdc,RGB(0,0,0));
 			for(int i=0;i<num;i++){
 				sprintf(buf,"%2d-( %3d , %3d )",i,p[i].x,p[i].y);
-				TextOut(hdc, 400+i/25*300,20+i%25*15,buf,strlen(buf));
+				TextOut(hdc, 400+i/25*100,20+i%25*15,buf,strlen(buf));
 			}
+			for(int i=0;i<num;i++){
+				sprintf(buf,"%2d",pindex[i]);
+				TextOut(hdc, 460+i/25*100,20+i%25*15,buf,strlen(buf));
+			}
+
 			SetTextColor(hdc,RGB(255,0,255));
 			for(int i=0;i<top+1;i++){
 				sprintf(buf," %2d ",stack[i]);				
@@ -119,7 +121,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 				case VK_RETURN:
 					InitPoints(p, stack, num);
 				case VK_F3:
-					top=convex( p,stack,num );
+					top=convex( p,stack, pindex, num );
 					InvalidateRect(hwnd, &rect,TRUE);
 					break; 
 				case VK_SPACE:
@@ -130,53 +132,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 						KillTimer(hwnd, ID_TIME);
 					}
 					break;	
-				case VK_INSERT:
-					SaveData( p,stack,num );
-					break;	
 			}
 			return 0;
 		case WM_TIMER:
 			PostMessage(hwnd, WM_KEYDOWN,VK_RETURN,0);
 			return 0;	
-		case WM_LBUTTONDOWN: 
-			SetCapture(hwnd); 
-			GetClientRect(hwnd, &rcClient); 
-			ptClientUL.x = rcClient.left; 
-			ptClientUL.y = rcClient.top; 
-			ptClientLR.x = rcClient.right + 1; 
-			ptClientLR.y = rcClient.bottom + 1; 
-			ClientToScreen(hwnd, &ptClientUL); 
-			ClientToScreen(hwnd, &ptClientLR); 
-			SetRect(&rcClient, ptClientUL.x, ptClientUL.y, ptClientLR.x, ptClientLR.y); 
-			ClipCursor(&rcClient); 
-			ptsBegin = MAKEPOINTS(lParam); 
-			return 0; 
-		case WM_MOUSEMOVE: 
-			if (wParam & MK_LBUTTON) 
-			{ 
-				hdc = GetDC(hwnd); 
-				SetROP2(hdc, R2_NOTXORPEN); 
-				if (fPrevLine) 
-				{ 
-					MoveToEx(hdc, ptsBegin.x, ptsBegin.y, (LPPOINT) NULL); 
-					LineTo(hdc, ptsPrevEnd.x, ptsPrevEnd.y); 
-				} 
-				ptsEnd = MAKEPOINTS(lParam); 
-				MoveToEx(hdc, ptsBegin.x, ptsBegin.y, (LPPOINT) NULL); 
-				LineTo(hdc, ptsEnd.x, ptsEnd.y); 
-				fPrevLine = TRUE; 
-				ptsPrevEnd = ptsEnd; 
-				ReleaseDC(hwnd, hdc); 
-			} 
-			break; 
-		case WM_LBUTTONUP: 
-			fPrevLine = FALSE; 
-			ClipCursor(NULL); 
-			ReleaseCapture(); 
-			return 0; 
 		case WM_DESTROY: 
 			free(p);
 			free(stack);
+			free(pindex);
 			DeleteObject(hPen);
 			DeleteObject(hFont);
 			PostQuitMessage(0); 
@@ -214,27 +178,28 @@ int sort(POINT *p, int *stack, int size) {
 	quickSort(stack, p, 0, size - 1);
 	return 0; 
 }
-int convex( POINT *p, int *stack, int size ) {
-	int *pindex=malloc(size*sizeof(int));
-	for(int i=0;i<size;i++)pindex[i]=i;
+int convex( POINT *p, int *stack,int *pindex, int size ) {
+  	int i, t, top = 0;
+	for( i=0;i<size;i++)pindex[i]=i;
 	sort(p, pindex, size);
-	for(int i=0;i<size;i++){stack[i]=pindex[i];}
-	int top = 0;
-	for(int i = top+1; i<size; i++){
-		while((top>0) && (cross(p[stack[top-1]],p[stack[top]],p[pindex[i]])<=0)){ top--; }
-		stack[++top]=pindex[i];
+	for(i=0;i<size;i++){stack[i]=pindex[i];}
+	/* lower  */
+	for ( i = 0; i < size; ++i) {
+	  while (top >= 2 && cross(p[stack[top-2]], p[stack[top-1]], p[pindex[i]]) <= 0) --top;
+	  stack[top++] = pindex[i];
 	}
-	for(int i = size-2; i>=0; i--){
-		while((top>0) && (cross(p[stack[top-1]],p[stack[top]],p[pindex[i]])<0)){top--; }
-		stack[++top]=pindex[i];
-	}	
-	free(pindex);
-	return top;
+	/* upper  */
+	for (i = size-2, t = top+1; i >= 0; --i) {
+	  while (top >= t && cross(p[stack[top-2]], p[stack[top-1]], p[pindex[i]]) <= 0) --top;
+	  stack[top++] = pindex[i];
+	}
+	return top-1;
 }
-void InitPoints(POINT* p, int *stack, int num){
+
+void InitPoints(POINT* p, int* pindex, int num){
 	for(int i=0;i<num;i++){
 		p[i].x=50+rand()%150*2;
 		p[i].y=50+rand()%150*2;
-		stack[i]=i;
+		pindex[i]=i;
 	}
 }
