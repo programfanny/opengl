@@ -70,6 +70,7 @@ void ShowPoints( HDC hdc, POINT *points, int num );
 void ShowPointsData( HDC hdc, DOTHULL *dothull );
 void ShowRect( HDC hdc,int left, int top, int right, int bottom );
 void SolveConvex(HWND hwnd, HWND glhwnd, DOTHULL *dothull);
+void UpdateView(int deltaX, int deltaY);
 
 LRESULT CALLBACK WndProc( HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam );
 LRESULT CALLBACK glWndProc( HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam );
@@ -115,7 +116,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam){
 	HINSTANCE hInstance;
 	static HWND glhwnd;
 	static DOTHULL dothull;
-
+	static int lastX=0, lastY=0, isDragging=0;
 	switch(message){
 		case WM_CREATE:
 			hInstance = ((LPCREATESTRUCT) lParam)->hInstance;
@@ -123,7 +124,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam){
 			srand((unsigned)time(NULL));
 			InitDotHull(&dothull,30);
 			SolveConvex(hwnd, glhwnd, &dothull);
-
 			break;
 		case WM_PAINT:
 			PostMessage(glhwnd,WM_PAINT,(WPARAM)&dothull,0);
@@ -134,7 +134,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam){
 			ShowRect(hdc,15,15,315,315);
 			ShowDothullInfo(hdc,&dothull);
 			EndPaint( hwnd, &ps );
-
 			break;
 		case WM_KEYDOWN:
 			switch(wParam){
@@ -157,7 +156,28 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam){
 					break;
 			}
 			return 0;
-
+		case WM_LBUTTONDOWN:
+		    // 记录鼠标按下位置
+		    lastX = LOWORD(lParam);
+		    lastY = HIWORD(lParam);
+		    isDragging = TRUE;
+		    return 0;
+		case WM_MOUSEMOVE:
+		    if (isDragging) {
+		        int x = LOWORD(lParam);
+		        int y = HIWORD(lParam);
+		        int deltaX = x - lastX;
+		        int deltaY = y - lastY;
+		        UpdateView(deltaX, deltaY);
+		        lastX = x;
+		        lastY = y;
+		        // 重绘窗口
+		        InvalidateRect(hwnd, NULL, FALSE);
+		    }
+		    return 0;
+		case WM_LBUTTONUP:
+		    isDragging = FALSE;
+		    return 0;
 		case WM_DESTROY:
 			FreeDotHull(&dothull);
 			PostQuitMessage(0);
@@ -254,6 +274,16 @@ void RenderScene(void* param){
 		glShowConvex3d(param);
 		//glShowHull3D(param);
 	}
+}
+void UpdateView(int deltaX, int deltaY) {
+    static float angleX = 0.0f;
+    static float angleY = 0.0f;
+    angleX += deltaX * 0.01f;
+    angleY += deltaY * 0.01f;
+    if (angleY > 1.5f) angleY = 1.5f;
+    if (angleY < -1.5f) angleY = -1.5f;
+    glRotatef(angleX, 0.0f, 1.0f, 0.0f);
+    glRotatef(angleY, 1.0f, 0.0f, 0.0f);
 }
 void DrawAxis(){
 	GLfloat varray[][3]={
@@ -421,7 +451,8 @@ void SolveConvex(HWND hwnd, HWND glhwnd, DOTHULL *dothull){
 	GetxyConvex(dothull);
 	GetyzConvex(dothull);
 	GetxzConvex(dothull);
-	Get3DConvexB(hwnd, glhwnd, dothull);
+	// Get3DConvexB(hwnd, glhwnd, dothull);
+	Get3DConvexA(hwnd, glhwnd, dothull);
 }
 int Cross(POINT O, POINT A, POINT B){
 	return (A.x-O.x)*(B.y-O.y)-(A.y-O.y)*(B.x-O.x);
@@ -892,7 +923,97 @@ void Get3DConvexB( HWND hwnd, HWND glhwnd, DOTHULL *dothull ){
     dothull->num_faces=out_size;
     dothull->faces=out;
 }
+// 找到X坐标最大和最小的点
+void findMinMaxX(POINT3D *points, int n, int *minX, int *maxX) {
+    *minX = *maxX = 0;
+    for (int i = 1; i < n; i++) {
+        if (points[i].x < points[*minX].x) {
+            *minX = i;
+        }
+        if (points[i].x > points[*maxX].x) {
+            *maxX = i;
+        }
+    }
+}
 
+// 找到Y坐标最大和最小的点
+void findMinMaxY(POINT3D *points, int n, int *minY, int *maxY) {
+    *minY = *maxY = 0;
+    for (int i = 1; i < n; i++) {
+        if (points[i].y < points[*minY].y) {
+            *minY = i;
+        }
+        if (points[i].y > points[*maxY].y) {
+            *maxY = i;
+        }
+    }
+}
+
+// 找到Z坐标最大和最小的点
+void findMinMaxZ(POINT3D *points, int n, int *minZ,int *maxZ) {
+    *minZ = *maxZ = 0;
+    for (int i = 1; i < n; i++) {
+        if (points[i].z < points[*minZ].z) {
+            *minZ = i;
+        }
+        if (points[i].z > points[*maxZ].z) {
+            *maxZ = i;
+        }
+    }
+}
+
+// 构建初始凸包
+void buildInitialHull( POINT3D *points, int num, int **faces, int *faceCount ) {
+	int count=*faceCount;
+    int minX, maxX, minY, maxY, minZ, maxZ;
+    findMinMaxX(points, num, &minX, &maxX);
+    findMinMaxY(points, num, &minY, &maxY);
+    findMinMaxZ(points, num, &minZ, &maxZ);
+    faces[count][0] = minX; faces[count][1] = minY; faces[count][2] = minZ; count++;
+    faces[count][0] = minY; faces[count][1] = maxX; faces[count][2] = minZ; count++;
+    faces[count][0] = maxX; faces[count][1] = maxY; faces[count][2] = minZ; count++;
+    faces[count][0] = maxY; faces[count][1] = minX; faces[count][2] = minZ; count++;
+
+    faces[count][0] = minY; faces[count][1] = minX; faces[count][2] = maxZ; count++;
+    faces[count][0] = maxX; faces[count][1] = minY; faces[count][2] = maxZ; count++;
+    faces[count][0] = maxY; faces[count][1] = maxX; faces[count][2] = maxZ; count++;
+    faces[count][0] = minX; faces[count][1] = maxY; faces[count][2] = maxZ; count++;
+    *faceCount=count;
+}
+void buildInitialHull2( POINT3D *points, int num, int **faces,int *faceCount) {
+    int count=*faceCount;
+    int minX, maxX, minY, maxY, minZ, maxZ;
+    findMinMaxX(points, num, &minX, &maxX);
+    findMinMaxY(points, num, &minY, &maxY);
+    findMinMaxZ(points, num, &minZ, &maxZ);
+
+    faces[count][0] = minX; faces[count][1] = minY; faces[count][2] = minZ; count++;
+    faces[count][0] = minX; faces[count][1] = minY; faces[count][2] = maxZ; count++;
+    faces[count][0] = minX; faces[count][1] = maxZ; faces[count][2] = maxY; count++;
+    faces[count][0] = minX; faces[count][1] = maxY; faces[count][2] = minZ; count++;
+    faces[count][0] = maxX; faces[count][1] = minY; faces[count][2] = minZ; count++;
+    faces[count][0] = maxX; faces[count][1] = minY; faces[count][2] = maxZ; count++;
+    faces[count][0] = maxX; faces[count][1] = maxZ; faces[count][2] = maxY; count++;
+    faces[count][0] = maxX; faces[count][1] = maxY; faces[count][2] = minZ; count++;
+
+    *faceCount=count;
+}
+void Get3DConvexA( HWND hwnd, HWND glhwnd, DOTHULL *dothull ){
+	POINT3D *points=dothull->points;
+	int *pindex=dothull->pindex;
+	int num=dothull->num_points;
+	// int **side=malloc(num*sizeof(int*));
+	// for(int i=0;i<num;i++){
+	// 	side[i]=malloc(2*sizeof(int));
+	// }
+	dothull->faces=malloc(num*sizeof(int*));
+	for(int i=0;i<num;i++){
+		dothull->faces[i]=malloc(3*sizeof(int));
+	}
+	int num_face_temp=0;
+	buildInitialHull( points, num, dothull->faces, &num_face_temp);
+	dothull->num_faces=num_face_temp;	
+}
 /*typedef int (*cmp_func)(void *a, void *b);
 
 // 快速排序的分区函数
